@@ -24,20 +24,12 @@ o.bind("SUPER + ALT + F8", "Open Omanote", "omarchy-shell shell summon b.omanote
 o.bind("SUPER + CTRL + F8", "Close Omanote", "omarchy-shell shell hide b.omanote")
 ```
 
-## Storage and behavior
+## Security
 
-Omanote runs `bash` and `secret-tool`. It stores the note with the desktop Secret Service using the attributes `omarchy-plugin=b.omanote` and `field=note`.
-
-Automatic saves briefly stage the note in a randomly named file under `$XDG_RUNTIME_DIR`, pipe it into `secret-tool store`, and delete the runtime file immediately afterward. Note contents are never stored in `~/.config/omarchy/shell.json`. Omanote does not use the network.
-
-Plugins run unsandboxed inside `omarchy-shell`; review the source before installing it.
+Notes are stored in the desktop Secret Service rather than `~/.config/omarchy/shell.json`. Automatic saves use a randomly named file in the user runtime directory and delete it immediately afterward.
 
 ## Update
 
 ```bash
 omarchy plugin update b.omanote
 ```
-
-## License
-
-[MIT](LICENSE)
