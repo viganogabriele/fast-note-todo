@@ -8,23 +8,11 @@ Omanote adds a secure multiline scratch note to the Omarchy bar and saves change
 
 Omanote requires `secret-tool`, provided by the `libsecret` package.
 
-Install Omanote disabled so you can review it before it runs:
-
 ```bash
-omarchy plugin add https://github.com/brianblakely/omanote.git --no-enable
+omarchy plugin add https://github.com/brianblakely/omanote.git
 ```
 
-Review the installed checkout:
-
-```bash
-omarchy plugin edit b.omanote
-```
-
-Then enable it in the right bar section:
-
-```bash
-omarchy plugin enable b.omanote --section right
-```
+Accept the prompt to enable Omanote. Omarchy places it in the right bar section by default.
 
 ## Optional shortcuts
 
@@ -42,7 +30,7 @@ Omanote runs `bash` and `secret-tool`. It stores the note with the desktop Secre
 
 Automatic saves briefly stage the note in a randomly named file under `$XDG_RUNTIME_DIR`, pipe it into `secret-tool store`, and delete the runtime file immediately afterward. Note contents are never stored in `~/.config/omarchy/shell.json`. Omanote does not use the network.
 
-Plugins run unsandboxed inside `omarchy-shell`; review the checkout before enabling it.
+Plugins run unsandboxed inside `omarchy-shell`; review the source before installing it.
 
 ## Update
 
