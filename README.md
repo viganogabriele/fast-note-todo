@@ -6,17 +6,11 @@ Omanote adds a secure multiline scratch note to the Omarchy bar and saves change
 
 ## Install
 
-Omanote requires `secret-tool`, provided by the `libsecret` package.
-
 ```bash
 omarchy plugin add https://github.com/brianblakely/omanote.git
 ```
 
-Accept the prompt to enable Omanote. Omarchy places it in the right bar section by default.
-
-## Optional shortcuts
-
-Global keybindings remain user-owned. Add any of these to your Hyprland bindings:
+## Shortcuts
 
 ```lua
 o.bind("SUPER + F8", "Toggle Omanote", "omarchy-shell shell toggle b.omanote")
