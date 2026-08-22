@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "id": "io.github.viganogabriele.omanote-plus",
-  "name": "Omanote Plus",
+  "id": "io.github.viganogabriele.fast-note-todo",
+  "name": "Fast Note Todo",
   "version": "0.1.0",
   "author": "Gabriele Vigano",
   "license": "MIT",
@@ -13,7 +13,7 @@
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
-    "displayName": "Omanote Plus",
+    "displayName": "Fast Note Todo",
     "description": "Shows a note icon and opens a secure multiline scratch note with an added to-do list mode",
     "category": "Info",
     "allowMultiple": false

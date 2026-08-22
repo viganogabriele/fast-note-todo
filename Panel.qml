@@ -7,8 +7,8 @@ import qs.Ui
 
 Panel {
   id: root
-  moduleName: "io.github.viganogabriele.omanote-plus"
-  ipcTarget: "io.github.viganogabriele.omanote-plus"
+  moduleName: "io.github.viganogabriele.fast-note-todo"
+  ipcTarget: "io.github.viganogabriele.fast-note-todo"
   manageIpc: false
 
   property var anchorItem: null

@@ -4,7 +4,7 @@ import qs.Ui
 
 BarWidget {
   id: root
-  moduleName: "io.github.viganogabriele.omanote-plus"
+  moduleName: "io.github.viganogabriele.fast-note-todo"
 
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
 
