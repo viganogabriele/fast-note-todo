@@ -5,10 +5,16 @@
 Fast Note Todo adds a secure multiline scratch note *and* a to-do list to the
 Omarchy bar, and saves both automatically.
 
+Lives as one icon in the Omarchy bar:
+
+![The bar icon, next to the clock and other indicators](preview-bar.png)
+
+Click it to open the panel:
+
 ![Note tab](preview.png)
 ![To-Do tab, the new part in this fork](preview-todo.png)
 
-(Both screenshots use placeholder example content, not real notes.)
+(All screenshots use placeholder example content, not real notes.)
 
 ## Credit
 
@@ -22,14 +28,6 @@ drag-to-reorder, inline editing, its own storage field) is new here. See
 
 ```bash
 omarchy plugin add https://github.com/viganogabriele/fast-note-todo.git --enable --yes
-```
-
-## Shortcuts
-
-```lua
-o.bind("SUPER + F8", "Toggle Fast Note Todo", "omarchy-shell shell toggle io.github.viganogabriele.fast-note-todo")
-o.bind("SUPER + ALT + F8", "Open Fast Note Todo", "omarchy-shell shell summon io.github.viganogabriele.fast-note-todo")
-o.bind("SUPER + CTRL + F8", "Close Fast Note Todo", "omarchy-shell shell hide io.github.viganogabriele.fast-note-todo")
 ```
 
 ## Security
