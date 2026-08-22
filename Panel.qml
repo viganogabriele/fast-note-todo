@@ -7,8 +7,8 @@ import qs.Ui
 
 Panel {
   id: root
-  moduleName: "b.omanote"
-  ipcTarget: "b.omanote"
+  moduleName: "io.github.viganogabriele.omanote-plus"
+  ipcTarget: "io.github.viganogabriele.omanote-plus"
   manageIpc: false
 
   property var anchorItem: null
@@ -103,6 +103,9 @@ Panel {
     return currentTodoJson() !== savedTodoJson
   }
 
+  // The keyring attribute stays "b.omanote" (the plugin's pre-fork id) on
+  // purpose, independent of moduleName/ipcTarget above — changing it would
+  // orphan whatever note is already stored under that key.
   function loadScript(field) {
     return "command -v secret-tool >/dev/null 2>&1 || { echo 'secret-tool not found' >&2; exit 127; }\n"
       + "secret-tool lookup omarchy-plugin b.omanote field " + field
