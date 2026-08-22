@@ -50,7 +50,7 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: "\uf249"
+    text: "\uf15c"
     tooltipText: "Omanote"
     onPressed: root.toggle()
   }
