@@ -5,15 +5,19 @@
 Fast Note Todo adds a secure multiline scratch note *and* a to-do list to the
 Omarchy bar, and saves both automatically.
 
-![Fast Note Todo screenshot](preview.png)
+![Note tab](preview.png)
+![To-Do tab, the new part in this fork](preview-todo.png)
+
+(Both screenshots use placeholder example content, not real notes.)
 
 ## Credit
 
 This is a fork of [Omanote](https://github.com/brianblakely/omanote) by
 Brian Blakely (MIT-licensed) — the note view, its Secret Service storage,
-and the panel plumbing are his. The added To-Do tab (add/complete/delete,
-drag-to-reorder, inline editing, its own storage field) is new here. See
-[LICENSE](LICENSE) for the original copyright notice.
+and the panel plumbing are his (`preview.png` above is his original
+screenshot). The added To-Do tab (add/complete/delete, drag-to-reorder,
+inline editing, its own storage field) is new here. See [LICENSE](LICENSE)
+for the original copyright notice.
 
 ## Install
 
