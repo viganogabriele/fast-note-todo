@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls as QQC
+import QtQuick.Effects
 import Quickshell
 import Quickshell.Io
 import qs.Commons
@@ -26,6 +27,7 @@ Panel {
 
   property string viewMode: "note"
   property bool showCompleted: false
+  property int selectedUid: -1
   property var completedItems: []
   property string newTodoText: ""
   property string savedTodoJson: "{}"
@@ -51,6 +53,13 @@ Panel {
   // close discard instead of save (Escape); left false everywhere else.
   property int editingUid: -1
   property bool discardPendingEdit: false
+
+  // Hard ceiling on what a single secret-tool lookup will hand back to the
+  // long-lived shell. We're the only ones who ever write these entries, but
+  // anything with Secret Service access could stuff an oversized value in —
+  // head -c below keeps StdioCollector's buffer and the JSON parse that
+  // follows bounded no matter what's actually stored.
+  readonly property int secretReadCapBytes: 1048576
 
   readonly property bool dirty: noteText !== savedText
   readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || ""
@@ -107,12 +116,18 @@ Panel {
   // purpose, independent of moduleName/ipcTarget above — changing it would
   // orphan whatever note is already stored under that key.
   function loadScript(field) {
+    // head -c bounds how much of secret-tool's stdout we ever buffer/parse;
+    // PIPESTATUS keeps the script's own exit code equal to secret-tool's
+    // (not head's), so a real lookup failure still reports as an error
+    // instead of looking like a successful empty read.
     return "command -v secret-tool >/dev/null 2>&1 || { echo 'secret-tool not found' >&2; exit 127; }\n"
       + "secret-tool lookup omarchy-plugin b.omanote field " + field
+      + " | head -c " + root.secretReadCapBytes + "\n"
+      + "exit \"${PIPESTATUS[0]}\""
   }
 
   function storeScript(field) {
-    var label = field === "todos" ? "Omanote todos" : "Omanote note"
+    var label = field === "todos" ? "Fast Note Todo todos" : "Fast Note Todo note"
     return "path=$1\n"
       + "if ! command -v secret-tool >/dev/null 2>&1; then\n"
       + "  echo 'secret-tool not found' >&2\n"
@@ -144,7 +159,10 @@ Panel {
   // jarring scroll-jump instead of a tab switch.
   function focusEditor() {
     if (root.viewMode === "todo") {
-      newTodoField.forceActiveFocus()
+      if (!root.showCompleted) {
+        root.ensureTodoSelection()
+        keyScope.forceActiveFocus()
+      }
     } else {
       noteArea.forceActiveFocus()
     }
@@ -263,7 +281,9 @@ Panel {
   function addTodoItem() {
     var text = String(newTodoText || "").trim()
     if (text === "") return
-    todoModel.append({ uid: root.nextTodoUid++, text: text, done: false })
+    var uid = root.nextTodoUid++
+    todoModel.append({ uid: uid, text: text, done: false })
+    root.selectedUid = uid
     newTodoText = ""
     newTodoField.text = ""
     newTodoField.forceActiveFocus()
@@ -272,15 +292,65 @@ Panel {
 
   function setTodoDone(index, done) {
     if (index < 0 || index >= todoModel.count) return
+    var uid = todoModel.get(index).uid
+    var wasSelected = done && root.selectedUid === uid
+    var priorVisible = wasSelected ? visibleTodoUids() : null
     todoModel.setProperty(index, "done", done)
+    if (wasSelected) {
+      var idx = priorVisible.indexOf(uid)
+      var remaining = priorVisible.filter(function(u) { return u !== uid })
+      root.selectedUid = remaining.length === 0 ? -1 : remaining[Math.min(idx, remaining.length - 1)]
+    }
     scheduleTodoSave()
   }
 
   function deleteTodoAt(index) {
     if (index < 0 || index >= todoModel.count) return
-    if (root.editingUid === todoModel.get(index).uid) root.editingUid = -1
+    var uid = todoModel.get(index).uid
+    if (root.editingUid === uid) root.editingUid = -1
+    var wasSelected = root.selectedUid === uid
     todoModel.remove(index)
+    if (wasSelected) {
+      if (index < todoModel.count) root.selectedUid = todoModel.get(index).uid
+      else if (todoModel.count > 0) root.selectedUid = todoModel.get(todoModel.count - 1).uid
+      else root.selectedUid = -1
+    }
     scheduleTodoSave()
+  }
+
+  function indexForUid(uid) {
+    for (var i = 0; i < todoModel.count; i++) {
+      if (todoModel.get(i).uid === uid) return i
+    }
+    return -1
+  }
+
+  function visibleTodoUids() {
+    var out = []
+    for (var i = 0; i < todoModel.count; i++) {
+      var it = todoModel.get(i)
+      if (!it.done) out.push(it.uid)
+    }
+    return out
+  }
+
+  function ensureTodoSelection() {
+    var ids = visibleTodoUids()
+    if (ids.indexOf(root.selectedUid) === -1) root.selectedUid = ids.length > 0 ? ids[0] : -1
+  }
+
+  function selectNextTodo() {
+    var ids = visibleTodoUids()
+    if (ids.length === 0) { root.selectedUid = -1; return }
+    var idx = ids.indexOf(root.selectedUid)
+    root.selectedUid = idx === -1 ? ids[0] : ids[Math.min(idx + 1, ids.length - 1)]
+  }
+
+  function selectPrevTodo() {
+    var ids = visibleTodoUids()
+    if (ids.length === 0) { root.selectedUid = -1; return }
+    var idx = ids.indexOf(root.selectedUid)
+    root.selectedUid = idx === -1 ? ids[0] : ids[Math.max(idx - 1, 0)]
   }
 
   function setTodoText(index, text) {
@@ -408,6 +478,7 @@ Panel {
       root.viewMode = parsedMode
       todoLoaded = true
       todoStorageStatus = "ready"
+      root.ensureTodoSelection()
       if (prunedOnLoad) {
         // Force a save even though the in-memory state matches what we just
         // loaded — the on-disk copy still has the expired entries in it.
@@ -478,6 +549,15 @@ Panel {
   }
 
   onViewModeChanged: scheduleTodoSave()
+
+  // Whenever an inline edit ends (Enter, Escape-discard, or a click
+  // elsewhere committing it), hand keyboard focus back to the list so
+  // j/k/space/e/x navigation resumes without the user having to click.
+  onEditingUidChanged: {
+    if (editingUid === -1 && root.viewMode === "todo" && !root.showCompleted) {
+      Qt.callLater(function() { keyScope.forceActiveFocus() })
+    }
+  }
 
   onOpenedChanged: {
     if (opened) {
@@ -609,6 +689,7 @@ Panel {
     contentHeight: notePanel.fittedContentHeight(root.fittedContentHeightFor(), root.panelMaxHeight)
 
     Item {
+      id: keyScope
       anchors.fill: parent
       focus: true
 
@@ -623,10 +704,59 @@ Panel {
         if (root.editingUid !== -1) {
           root.discardPendingEdit = true
           root.editingUid = -1
+        } else if (root.viewMode === "todo" && root.showCompleted) {
+          root.showCompleted = false
+        } else if (root.viewMode === "todo" && newTodoField.activeFocus) {
+          root.ensureTodoSelection()
+          keyScope.forceActiveFocus()
         } else {
           root.close()
         }
         event.accepted = true
+      }
+
+      // Keyboard-first To-Do navigation, active only in "list mode": not
+      // while typing in the add field, editing a row inline, viewing the
+      // note, or browsing recently-completed — so letters like e/x/q never
+      // leak into text being typed. BeforeItem priority means this fires
+      // ahead of whatever currently holds focus, so the guards above are
+      // what keep it from swallowing normal typing.
+      Keys.onPressed: function(event) {
+        if (root.viewMode !== "todo" || root.showCompleted) return
+        if (root.editingUid !== -1 || newTodoField.activeFocus) return
+
+        switch (event.key) {
+        case Qt.Key_Down:
+        case Qt.Key_J:
+          root.selectNextTodo()
+          event.accepted = true
+          break
+        case Qt.Key_Up:
+        case Qt.Key_K:
+          root.selectPrevTodo()
+          event.accepted = true
+          break
+        case Qt.Key_Space:
+          if (root.selectedUid !== -1) root.setTodoDone(root.indexForUid(root.selectedUid), true)
+          event.accepted = true
+          break
+        case Qt.Key_E:
+        case Qt.Key_Return:
+        case Qt.Key_Enter:
+          if (root.selectedUid !== -1) root.beginEditTodo(root.selectedUid)
+          event.accepted = true
+          break
+        case Qt.Key_X:
+        case Qt.Key_Delete:
+        case Qt.Key_Backspace:
+          if (root.selectedUid !== -1) root.deleteTodoAt(root.indexForUid(root.selectedUid))
+          event.accepted = true
+          break
+        case Qt.Key_Q:
+          newTodoField.forceActiveFocus()
+          event.accepted = true
+          break
+        }
       }
 
       // Catches clicks that land on empty panel background (not on any row,
@@ -720,6 +850,9 @@ Panel {
             width: editorScroll.availableWidth
             height: Math.max(editorScroll.availableHeight, implicitHeight)
             text: root.noteText
+            // Loaded from the Secret Service like the todo text above; keep
+            // it plain so stored markup is never rendered as rich text.
+            textFormat: TextEdit.PlainText
             placeholderText: ""
             wrapMode: TextEdit.Wrap
             selectByMouse: true
@@ -749,7 +882,7 @@ Panel {
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
-            spacing: Style.spacing.sm
+            spacing: Style.spacing.controlGap
             visible: !root.showCompleted
 
             TextField {
@@ -800,7 +933,11 @@ Panel {
             tooltipText: "Back to list"
             fontSize: Style.font.body
             foreground: root.foreground
-            onClicked: root.showCompleted = false
+            onClicked: {
+              root.showCompleted = false
+              root.ensureTodoSelection()
+              Qt.callLater(function() { keyScope.forceActiveFocus() })
+            }
           }
 
           Item {
@@ -814,7 +951,7 @@ Panel {
             QQC.ScrollView {
               id: todoScroll
               anchors.top: parent.top
-              anchors.topMargin: Style.spacing.sm
+              anchors.topMargin: Style.spacing.lg
               anchors.left: parent.left
               anchors.right: parent.right
               anchors.bottom: parent.bottom
@@ -849,7 +986,7 @@ Panel {
                   anchors.top: parent.top
                   anchors.left: parent.left
                   anchors.right: parent.right
-                  spacing: Style.spacing.sm
+                  spacing: Style.spacing.rowGap
 
                   Repeater {
                     model: todoModel
@@ -864,6 +1001,7 @@ Panel {
                     readonly property bool isDone: done === true
                     readonly property bool isDragging: root.draggingUid === todoRow.uid
                     readonly property bool isEditing: root.editingUid === todoRow.uid
+                    readonly property bool isSelected: root.selectedUid === todoRow.uid
 
                     width: parent.width
                     height: (isDone && !isDragging) ? 0 : rowCard.implicitHeight
@@ -892,11 +1030,21 @@ Panel {
                       width: parent.width
                       implicitHeight: rowContent.implicitHeight + Style.spacing.md * 2
                       height: implicitHeight
-                      radius: Style.space(6)
-                      color: (rowMouse.containsMouse || todoRow.isDragging) && !todoRow.isDone
+                      radius: Style.cornerRadius
+                      // Same fill vocabulary as the rest of the shell (see
+                      // qs.Ui.CursorSurface): a hot row (mouse-hovered or
+                      // airborne while dragging) gets the transient hover
+                      // tint; the keyboard-selected row gets the persistent
+                      // "current" tint instead of a hard-edged border, so it
+                      // reads as part of the same visual language as every
+                      // other panel rather than a focus outline slapped on.
+                      readonly property bool isHot: (rowMouse.containsMouse || todoRow.isDragging) && !todoRow.isDone
+                      color: isHot
                         ? Style.hoverFillFor(root.foreground, Color.accent)
-                        : "transparent"
-                      border.width: todoRow.isDragging ? 1 : 0
+                        : (todoRow.isSelected && !todoRow.isEditing
+                          ? Style.selectedFillFor(root.foreground, Color.accent)
+                          : "transparent")
+                      border.width: todoRow.isDragging ? Style.normalBorderWidth : 0
                       border.color: Color.accent
 
                       Behavior on color { ColorAnimation { duration: 100 } }
@@ -909,7 +1057,10 @@ Panel {
                         // itself (which has its own MouseArea on top) — the
                         // checkbox/delete/drag zones fall through to here too
                         // while they're disabled during this row's own edit.
-                        onClicked: root.closeEditIfAny()
+                        onClicked: {
+                          root.closeEditIfAny()
+                          root.selectedUid = todoRow.uid
+                        }
                       }
 
                       Row {
@@ -917,8 +1068,8 @@ Panel {
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
-                        anchors.leftMargin: Style.spacing.sm
-                        anchors.rightMargin: Style.spacing.sm
+                        anchors.leftMargin: Style.space(10)
+                        anchors.rightMargin: Style.space(10)
                         spacing: Style.spacing.md
 
                         BorderSurface {
@@ -954,6 +1105,7 @@ Panel {
                             enabled: !todoRow.isDone && !todoRow.isEditing
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
+                              root.selectedUid = todoRow.uid
                               root.closeEditIfAny()
                               root.setTodoDone(todoRow.index, true)
                             }
@@ -973,6 +1125,11 @@ Panel {
                             anchors.verticalCenter: parent.verticalCenter
                             width: textSlot.width
                             text: todoRow.text
+                            // Stored todo text is untrusted (it round-trips through
+                            // the Secret Service and can be edited by anything with
+                            // access to it) — force plain text so markup can't be
+                            // interpreted as rich text and fetch external resources.
+                            textFormat: Text.PlainText
                             color: root.foreground
                             font.family: root.fontFamily
                             font.pixelSize: Style.font.bodySmall
@@ -982,7 +1139,10 @@ Panel {
                               anchors.fill: parent
                               enabled: !todoRow.isDone
                               cursorShape: Qt.IBeamCursor
-                              onClicked: root.beginEditTodo(todoRow.uid)
+                              onClicked: {
+                                root.selectedUid = todoRow.uid
+                                root.beginEditTodo(todoRow.uid)
+                              }
                             }
                           }
 
@@ -1057,6 +1217,7 @@ Panel {
 
                             onPressed: function(mouse) {
                               root.closeEditIfAny()
+                              root.selectedUid = todoRow.uid
                               pressGlobalY = mapToItem(todoColumn, 0, mouse.y).y
                               root.draggingUid = todoRow.uid
                               root.dragOffsetY = 0
@@ -1116,7 +1277,7 @@ Panel {
           Item {
             id: completedArea
             anchors.top: backButton.bottom
-            anchors.topMargin: Style.spacing.sm
+            anchors.topMargin: Style.spacing.lg
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: parent.bottom
@@ -1138,7 +1299,7 @@ Panel {
               Column {
                 id: completedColumn
                 width: parent.width
-                spacing: Style.spacing.sm
+                spacing: Style.spacing.rowGap
 
                 Repeater {
                   model: root.completedItems
@@ -1150,12 +1311,23 @@ Panel {
                     width: parent.width
                     height: completedCard.implicitHeight
 
+                    RectangularShadow {
+                      anchors.fill: completedCard
+                      visible: completedMouse.containsMouse
+                      radius: completedCard.radius
+                      blur: 8
+                      spread: 0
+                      offset: Qt.vector2d(0, 1)
+                      color: Qt.rgba(0, 0, 0, 0.35)
+                      z: -1
+                    }
+
                     Rectangle {
                       id: completedCard
                       width: parent.width
                       implicitHeight: completedRowContent.implicitHeight + Style.spacing.md * 2
                       height: implicitHeight
-                      radius: Style.space(6)
+                      radius: Style.cornerRadius
                       color: completedMouse.containsMouse ? Style.hoverFillFor(root.foreground, Color.accent) : "transparent"
 
                       Behavior on color { ColorAnimation { duration: 100 } }
@@ -1172,8 +1344,8 @@ Panel {
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
-                        anchors.leftMargin: Style.spacing.sm
-                        anchors.rightMargin: Style.spacing.sm
+                        anchors.leftMargin: Style.space(10)
+                        anchors.rightMargin: Style.space(10)
                         spacing: Style.spacing.md
 
                         PanelActionButton {
@@ -1188,6 +1360,9 @@ Panel {
 
                         Text {
                           text: completedRow.modelData.text
+                          // Same untrusted-stored-text sink as the active list
+                          // above — keep it plain, never rich text.
+                          textFormat: Text.PlainText
                           color: Qt.darker(root.foreground, 1.4)
                           font.family: root.fontFamily
                           font.pixelSize: Style.font.bodySmall

@@ -51,7 +51,7 @@ BarWidget {
     anchors.fill: parent
     bar: root.bar
     text: "\uf15c"
-    tooltipText: "Omanote"
+    tooltipText: "Fast Note Todo"
     onPressed: root.toggle()
   }
 }
