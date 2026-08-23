@@ -5,7 +5,7 @@
 Fast Note Todo adds a secure multiline scratch note *and* a to-do list to the
 Omarchy bar — one icon next to the clock, saving both automatically.
 
-![Fast Note Todo: the original scratch note tab alongside the new To-Do tab](hero.png)
+![Fast Note Todo: the original scratch note tab alongside the new To-Do tab](preview.png)
 
 (Screenshots use placeholder example content, not real notes.)
 
