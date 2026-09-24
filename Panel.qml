@@ -956,37 +956,21 @@ Panel {
               anchors.right: parent.right
               anchors.bottom: parent.bottom
               clip: true
-              contentWidth: availableWidth
-              QQC.ScrollBar.vertical: QQC.ScrollBar {
-                policy: QQC.ScrollBar.AsNeeded
-              }
-              QQC.ScrollBar.horizontal: QQC.ScrollBar {
-                policy: QQC.ScrollBar.AlwaysOff
-              }
+              QQC.ScrollBar.vertical.policy: todoColumn.implicitHeight > todoScroll.height ? QQC.ScrollBar.AsNeeded : QQC.ScrollBar.AlwaysOff
+              QQC.ScrollBar.horizontal.policy: QQC.ScrollBar.AlwaysOff
 
               background: null
 
-              // Taller than its rows whenever the list is short, so the
-              // blank space below the cards — still inside the widget's
-              // box, just below the scrollable viewport's own content —
-              // is real clickable background instead of dead space the
-              // Flickable swallows before it ever reaches anything behind it.
-              Item {
-                id: todoListWrapper
+              Binding {
+                target: todoScroll.contentItem
+                property: "interactive"
+                value: todoColumn.implicitHeight > todoScroll.height
+              }
+
+              Column {
+                id: todoColumn
                 width: todoScroll.availableWidth
-                height: Math.max(todoColumn.implicitHeight, todoScroll.height)
-
-                MouseArea {
-                  anchors.fill: parent
-                  onClicked: root.closeEditIfAny()
-                }
-
-                Column {
-                  id: todoColumn
-                  anchors.top: parent.top
-                  anchors.left: parent.left
-                  anchors.right: parent.right
-                  spacing: Style.spacing.rowGap
+                spacing: Style.spacing.rowGap
 
                   Repeater {
                     model: todoModel
@@ -1272,7 +1256,6 @@ Panel {
               }
             }
           }
-          }
 
           Item {
             id: completedArea
@@ -1284,21 +1267,23 @@ Panel {
             visible: root.showCompleted
 
             QQC.ScrollView {
+              id: completedScroll
               anchors.fill: parent
               clip: true
-              contentWidth: availableWidth
-              QQC.ScrollBar.vertical: QQC.ScrollBar {
-                policy: QQC.ScrollBar.AsNeeded
-              }
-              QQC.ScrollBar.horizontal: QQC.ScrollBar {
-                policy: QQC.ScrollBar.AlwaysOff
-              }
+              QQC.ScrollBar.vertical.policy: completedColumn.implicitHeight > completedScroll.height ? QQC.ScrollBar.AsNeeded : QQC.ScrollBar.AlwaysOff
+              QQC.ScrollBar.horizontal.policy: QQC.ScrollBar.AlwaysOff
 
               background: null
 
+              Binding {
+                target: completedScroll.contentItem
+                property: "interactive"
+                value: completedColumn.implicitHeight > completedScroll.height
+              }
+
               Column {
                 id: completedColumn
-                width: parent.width
+                width: completedScroll.availableWidth
                 spacing: Style.spacing.rowGap
 
                 Repeater {
